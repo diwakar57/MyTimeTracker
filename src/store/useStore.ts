@@ -71,17 +71,17 @@ export const useStore = create<StoreState>()(
             if (id !== activityId && newTimers[id].status === 'running') {
               const t = newTimers[id];
               const startTime = t.startTime ? new Date(t.startTime) : new Date();
-              const elapsed = (Date.now() - startTime.getTime()) / 1000;
-              const durationSec = t.accumulatedSec + elapsed;
+              const segmentSec = (Date.now() - startTime.getTime()) / 1000;
+              const totalAccumulated = t.accumulatedSec + segmentSec;
               const session: Session = {
                 id: uuidv4(),
                 activityId: id,
                 startTime: t.startTime!,
                 endTime: now,
-                durationSec,
+                durationSec: segmentSec,
               };
               set((s) => ({ sessions: [...s.sessions, session] }));
-              newTimers[id] = { ...t, status: 'paused', startTime: null, accumulatedSec: durationSec };
+              newTimers[id] = { ...t, status: 'paused', startTime: null, accumulatedSec: totalAccumulated };
             }
           });
         }
@@ -142,17 +142,17 @@ export const useStore = create<StoreState>()(
             if (id !== activityId && newTimers[id].status === 'running') {
               const t = newTimers[id];
               const startTime = t.startTime ? new Date(t.startTime) : new Date();
-              const elapsed = (Date.now() - startTime.getTime()) / 1000;
-              const durationSec = t.accumulatedSec + elapsed;
+              const segmentSec = (Date.now() - startTime.getTime()) / 1000;
+              const totalAccumulated = t.accumulatedSec + segmentSec;
               const session: Session = {
                 id: uuidv4(),
                 activityId: id,
                 startTime: t.startTime!,
                 endTime: now,
-                durationSec,
+                durationSec: segmentSec,
               };
               set((s) => ({ sessions: [...s.sessions, session] }));
-              newTimers[id] = { ...t, status: 'paused', startTime: null, accumulatedSec: durationSec };
+              newTimers[id] = { ...t, status: 'paused', startTime: null, accumulatedSec: totalAccumulated };
             }
           });
           set({ timers: newTimers });
