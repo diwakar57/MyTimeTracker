@@ -8,8 +8,18 @@ import { signOut } from '@/lib/auth';
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { allowOverlap, setAllowOverlap } = useStore();
+  const { allowOverlap, setAllowOverlap, setStoreData } = useStore();
   const { user } = useAuth();
+
+  const handleSignOut = async () => {
+    setStoreData({
+      activities: [],
+      sessions: [],
+      timers: {},
+      allowOverlap: false,
+    });
+    await signOut();
+  };
 
   const navLinks = [
     { href: '/', label: 'Dashboard' },
@@ -70,7 +80,7 @@ export default function Navbar() {
                   </div>
                 )}
                 <button
-                  onClick={() => signOut()}
+                  onClick={handleSignOut}
                   className="text-xs text-gray-400 hover:text-white transition-colors"
                 >
                   Sign out

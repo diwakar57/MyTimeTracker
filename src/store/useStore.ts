@@ -4,11 +4,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { Activity, Session, TimerState } from '@/types';
 
 const DEFAULT_ACTIVITIES: Activity[] = [
-  { id: uuidv4(), name: 'Study', color: '#6366f1', createdAt: new Date().toISOString() },
-  { id: uuidv4(), name: 'Grading', color: '#f59e0b', createdAt: new Date().toISOString() },
-  { id: uuidv4(), name: 'Exercise', color: '#10b981', createdAt: new Date().toISOString() },
-  { id: uuidv4(), name: 'Research', color: '#3b82f6', createdAt: new Date().toISOString() },
-  { id: uuidv4(), name: 'Paper Reading', color: '#ec4899', createdAt: new Date().toISOString() },
+  { id: uuidv4(), name: 'Study', color: '#6366f1', createdAt: new Date().toISOString(), userId: 'local-default' },
+  { id: uuidv4(), name: 'Grading', color: '#f59e0b', createdAt: new Date().toISOString(), userId: 'local-default' },
+  { id: uuidv4(), name: 'Exercise', color: '#10b981', createdAt: new Date().toISOString(), userId: 'local-default' },
+  { id: uuidv4(), name: 'Research', color: '#3b82f6', createdAt: new Date().toISOString(), userId: 'local-default' },
+  { id: uuidv4(), name: 'Paper Reading', color: '#ec4899', createdAt: new Date().toISOString(), userId: 'local-default' },
 ];
 
 interface StoreState {
@@ -16,7 +16,7 @@ interface StoreState {
   sessions: Session[];
   timers: Record<string, TimerState>;
   allowOverlap: boolean;
-  addActivity: (name: string, color: string) => void;
+  addActivity: (name: string, color: string, userId: string) => void;
   updateActivity: (id: string, updates: Partial<Activity>) => void;
   deleteActivity: (id: string) => void;
   startTimer: (activityId: string) => void;
@@ -35,12 +35,13 @@ export const useStore = create<StoreState>()(
       timers: {},
       allowOverlap: false,
 
-      addActivity: (name, color) => {
+      addActivity: (name, color, userId) => {
         const activity: Activity = {
           id: uuidv4(),
           name,
           color,
           createdAt: new Date().toISOString(),
+          userId,
         };
         set((state) => ({ activities: [...state.activities, activity] }));
       },

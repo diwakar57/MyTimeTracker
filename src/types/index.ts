@@ -4,6 +4,7 @@ export interface Activity {
   color: string;
   icon?: string;
   createdAt: string;
+  userId: string;
 }
 
 export interface Session {

@@ -31,6 +31,12 @@ export default function FirebaseSync() {
   // Subscribe to real-time Firestore updates when user is logged in
   useEffect(() => {
     if (!user) {
+      setStoreData({
+        activities: [],
+        sessions: [],
+        timers: {},
+        allowOverlap: false,
+      });
       isInitialized.current = false;
       return;
     }
