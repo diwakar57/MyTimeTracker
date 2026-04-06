@@ -5,11 +5,12 @@ import {
   LineChart, Line, CartesianGrid,
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
-import { useStore } from '@/lib/store';
+import { useStore } from '@/store/useStore';
 import {
-  getTotalSecForPeriod, getDailyTotals, getStreak,
+  getActivityTotalSec, getDailyTotals, getStreak,
   getTopActivity, getActivityBreakdown,
 } from '@/lib/analytics';
+import { getDayBoundary, getWeekBoundary, getMonthBoundary } from '@/lib/timeUtils';
 
 type Period = 'today' | 'week' | 'month';
 
@@ -20,22 +21,41 @@ function fmtMin(sec: number): string {
   return `${m}m`;
 }
 
+function getPeriodBounds(period: Period): { from: Date; to: Date } {
+  const now = new Date();
+  if (period === 'today') {
+    const { start, end } = getDayBoundary(now);
+    return { from: start, to: end };
+  } else if (period === 'week') {
+    const { start, end } = getWeekBoundary(now);
+    return { from: start, to: end };
+  } else {
+    const { start, end } = getMonthBoundary(now);
+    return { from: start, to: end };
+  }
+}
+
 export default function Analytics() {
   const { activities, sessions } = useStore();
   const [period, setPeriod] = useState<Period>('today');
 
+  const { from, to } = getPeriodBounds(period);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
   const totalSec = activities.reduce(
-    (sum, a) => sum + getTotalSecForPeriod(sessions, a.id, period), 0
+    (sum, a) => sum + getActivityTotalSec(sessions, a.id, from, to), 0
   );
-  const topActivity = getTopActivity(activities, sessions, period);
+  const topActivity = getTopActivity(sessions, activities, from, to);
   const streak = getStreak(sessions);
-  const dailyTotals = getDailyTotals(sessions, 7);
-  const breakdown = getActivityBreakdown(activities, sessions, period);
+  const dailyTotals = getDailyTotals(sessions, sevenDaysAgo, new Date());
+  const breakdown = getActivityBreakdown(sessions, activities, from, to);
 
   const barData = activities
     .map(a => ({
       name: a.name,
-      minutes: Math.round(getTotalSecForPeriod(sessions, a.id, period) / 60),
+      minutes: Math.round(getActivityTotalSec(sessions, a.id, from, to) / 60),
       color: a.color,
     }))
     .filter(d => d.minutes > 0);
@@ -102,7 +122,7 @@ export default function Analytics() {
         <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5">
           <h3 className="text-sm font-medium text-gray-400 mb-4">Daily Minutes (Last 7 Days)</h3>
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={dailyTotals.map(d => ({ ...d, minutes: Math.round(d.totalSec / 60) }))}>
+            <LineChart data={dailyTotals}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 12 }} />
               <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} />
@@ -111,7 +131,7 @@ export default function Analytics() {
                 labelStyle={{ color: '#fff' }}
                 formatter={(v) => [`${v} min`, 'Total']}
               />
-              <Line type="monotone" dataKey="minutes" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6', r: 4 }} />
+              <Line type="monotone" dataKey="totalMin" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6', r: 4 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
