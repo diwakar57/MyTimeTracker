@@ -19,6 +19,21 @@ export default function FirebaseSync() {
   const lastWriteId = useRef<string>('');
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialized = useRef(false);
+  const lastConfirmedSnapshot = useRef<StoreSnapshot | null>(null);
+  const hasPendingWrite = useRef(false);
+  const queuedRemoteSnapshot = useRef<StoreSnapshot | null>(null);
+
+  const handleWriteFailure = useCallback((error: unknown) => {
+    console.error('Firestore Save Error:', error);
+    hasPendingWrite.current = false;
+    if (queuedRemoteSnapshot.current) {
+      setStoreData(queuedRemoteSnapshot.current);
+      lastConfirmedSnapshot.current = queuedRemoteSnapshot.current;
+      queuedRemoteSnapshot.current = null;
+      return;
+    }
+    if (lastConfirmedSnapshot.current) setStoreData(lastConfirmedSnapshot.current);
+  }, [setStoreData]);
 
   // Build a snapshot from current store slices (stable reference via useCallback)
   const buildSnapshot = useCallback((): StoreSnapshot => ({
@@ -38,17 +53,35 @@ export default function FirebaseSync() {
         allowOverlap: false,
       });
       isInitialized.current = false;
+      hasPendingWrite.current = false;
+      lastConfirmedSnapshot.current = null;
+      queuedRemoteSnapshot.current = null;
       return;
     }
 
     const unsubscribe = subscribeToFirestore(
       user.uid,
       (snapshot, writeId) => {
-        // Skip updates triggered by our own writes
-        if (writeId && writeId === lastWriteId.current) return;
+        if (writeId && writeId === lastWriteId.current) {
+          hasPendingWrite.current = false;
+          lastConfirmedSnapshot.current = snapshot;
+          if (queuedRemoteSnapshot.current) {
+            setStoreData(queuedRemoteSnapshot.current);
+            lastConfirmedSnapshot.current = queuedRemoteSnapshot.current;
+            queuedRemoteSnapshot.current = null;
+          }
+          isInitialized.current = true;
+          return;
+        }
+
+        if (hasPendingWrite.current) {
+          queuedRemoteSnapshot.current = snapshot;
+          return;
+        }
 
         // Apply remote data to local store
         setStoreData(snapshot);
+        lastConfirmedSnapshot.current = snapshot;
         isInitialized.current = true;
       },
       () => {
@@ -56,17 +89,24 @@ export default function FirebaseSync() {
         const snapshot = buildSnapshot();
         const writeId = uuidv4();
         lastWriteId.current = writeId;
+        hasPendingWrite.current = true;
         saveToFirestore(user.uid, snapshot, writeId)
-          .then(() => { isInitialized.current = true; })
-          .catch(console.error);
+          .then(() => {
+            lastConfirmedSnapshot.current = snapshot;
+            hasPendingWrite.current = false;
+            isInitialized.current = true;
+          })
+          .catch(handleWriteFailure);
       }
     );
 
     return () => {
       unsubscribe();
       isInitialized.current = false;
+      hasPendingWrite.current = false;
+      queuedRemoteSnapshot.current = null;
     };
-  }, [user, setStoreData, buildSnapshot]);
+  }, [user, setStoreData, buildSnapshot, handleWriteFailure]);
 
   // Debounced write to Firestore whenever local state changes
   useEffect(() => {
@@ -78,13 +118,19 @@ export default function FirebaseSync() {
       const snapshot = buildSnapshot();
       const writeId = uuidv4();
       lastWriteId.current = writeId;
-      saveToFirestore(user.uid, snapshot, writeId).catch(console.error);
+      hasPendingWrite.current = true;
+      saveToFirestore(user.uid, snapshot, writeId)
+        .then(() => {
+          lastConfirmedSnapshot.current = snapshot;
+          hasPendingWrite.current = false;
+        })
+        .catch(handleWriteFailure);
     }, DEBOUNCE_MS);
 
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  }, [user, buildSnapshot]);
+  }, [user, buildSnapshot, setStoreData, handleWriteFailure]);
 
   return null;
 }
