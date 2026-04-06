@@ -22,7 +22,9 @@ interface StoreState {
   startTimer: (activityId: string) => void;
   pauseTimer: (activityId: string) => void;
   resumeTimer: (activityId: string) => void;
+  resetTimer: (activityId: string) => void;
   setAllowOverlap: (val: boolean) => void;
+  setStoreData: (data: { activities: Activity[]; sessions: Session[]; timers: Record<string, TimerState>; allowOverlap: boolean }) => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -171,6 +173,23 @@ export const useStore = create<StoreState>()(
       },
 
       setAllowOverlap: (val) => set({ allowOverlap: val }),
+
+      resetTimer: (activityId) => {
+        set((state) => {
+          const timers = { ...state.timers };
+          delete timers[activityId];
+          return { timers };
+        });
+      },
+
+      setStoreData: (data) => {
+        set({
+          activities: data.activities,
+          sessions: data.sessions,
+          timers: data.timers,
+          allowOverlap: data.allowOverlap,
+        });
+      },
     }),
     {
       name: 'mytimetracker-store',

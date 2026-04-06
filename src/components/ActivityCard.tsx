@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function ActivityCard({ activity, onEdit }: Props) {
-  const { timers, sessions, startTimer, pauseTimer, resumeTimer, deleteActivity } = useStore();
+  const { timers, sessions, startTimer, pauseTimer, resumeTimer, resetTimer, deleteActivity } = useStore();
   const timer = timers[activity.id];
   const status = timer?.status ?? 'idle';
   const [elapsed, setElapsed] = useState(0);
@@ -42,6 +42,10 @@ export default function ActivityCard({ activity, onEdit }: Props) {
     if (confirm(`Delete "${activity.name}"?`)) deleteActivity(activity.id);
   };
 
+  const handleReset = () => {
+    if (confirm(`Reset timer for "${activity.name}"?`)) resetTimer(activity.id);
+  };
+
   return (
     <div className="bg-gray-800 rounded-xl p-5 shadow-lg border-l-4 flex flex-col gap-3"
       style={{ borderLeftColor: activity.color }}>
@@ -56,6 +60,13 @@ export default function ActivityCard({ activity, onEdit }: Props) {
             className="text-gray-400 hover:text-white px-2 py-1 rounded text-xs transition-colors"
           >
             ✏️
+          </button>
+          <button
+            onClick={handleReset}
+            className="text-gray-400 hover:text-blue-400 px-2 py-1 rounded text-xs transition-colors"
+            title="Reset timer"
+          >
+            🔄
           </button>
           <button
             onClick={handleDelete}
