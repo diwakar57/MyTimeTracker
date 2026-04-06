@@ -146,23 +146,23 @@ class AnalyticsScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 // Header
                 Row(
-                  children: const [
-                    Expanded(
+                  children: [
+                    const Expanded(
                         flex: 3,
                         child: Text('Activity',
                             style: TextStyle(
                                 color: Colors.grey, fontSize: 12))),
-                    Expanded(
+                    const Expanded(
                         flex: 2,
                         child: Text('Today',
                             style: TextStyle(
                                 color: Colors.grey, fontSize: 12))),
-                    Expanded(
+                    const Expanded(
                         flex: 2,
                         child: Text('Week',
                             style: TextStyle(
                                 color: Colors.grey, fontSize: 12))),
-                    Expanded(
+                    const Expanded(
                         flex: 2,
                         child: Text('Month',
                             style: TextStyle(
