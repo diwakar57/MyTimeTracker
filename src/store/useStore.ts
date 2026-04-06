@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { Activity, Session, TimerState } from '@/types';
 
+export const STORE_PERSIST_KEY = 'mytimetracker-store';
+
 const DEFAULT_ACTIVITIES: Activity[] = [
   { id: uuidv4(), name: 'Study', color: '#6366f1', createdAt: new Date().toISOString(), userId: 'local-default' },
   { id: uuidv4(), name: 'Grading', color: '#f59e0b', createdAt: new Date().toISOString(), userId: 'local-default' },
@@ -193,7 +195,7 @@ export const useStore = create<StoreState>()(
       },
     }),
     {
-      name: 'mytimetracker-store',
+      name: STORE_PERSIST_KEY,
     }
   )
 );

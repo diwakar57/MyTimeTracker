@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/components/AuthProvider';
 import { useStore } from '@/store/useStore';
 import { saveToFirestore, subscribeToFirestore, StoreSnapshot } from '@/lib/firestoreSync';
+import { STORE_PERSIST_KEY } from '@/store/useStore';
 
 const DEBOUNCE_MS = 1500;
 
@@ -15,8 +15,9 @@ export default function FirebaseSync() {
   const timers = useStore((s) => s.timers);
   const allowOverlap = useStore((s) => s.allowOverlap);
   const setStoreData = useStore((s) => s.setStoreData);
+  const lastClearedUserId = useRef<string | null>(null);
+  const localNonActivityStateRef = useRef({ sessions, timers, allowOverlap });
 
-  const lastWriteId = useRef<string>('');
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialized = useRef(false);
   const lastConfirmedSnapshot = useRef<StoreSnapshot | null>(null);
@@ -43,6 +44,21 @@ export default function FirebaseSync() {
     allowOverlap,
   }), [activities, sessions, timers, allowOverlap]);
 
+  useEffect(() => {
+    localNonActivityStateRef.current = { sessions, timers, allowOverlap };
+  }, [sessions, timers, allowOverlap]);
+
+  useEffect(() => {
+    if (!user) {
+      lastClearedUserId.current = null;
+      return;
+    }
+    // Clear stale persisted local state once per logged-in user to force cloud activity reload.
+    if (lastClearedUserId.current === user.uid) return;
+    localStorage.removeItem(STORE_PERSIST_KEY);
+    lastClearedUserId.current = user.uid;
+  }, [user]);
+
   // Subscribe to real-time Firestore updates when user is logged in
   useEffect(() => {
     if (!user) {
@@ -61,39 +77,36 @@ export default function FirebaseSync() {
 
     const unsubscribe = subscribeToFirestore(
       user.uid,
-      (snapshot, writeId) => {
-        if (writeId && writeId === lastWriteId.current) {
-          hasPendingWrite.current = false;
-          lastConfirmedSnapshot.current = snapshot;
-          if (queuedRemoteSnapshot.current) {
-            setStoreData(queuedRemoteSnapshot.current);
-            lastConfirmedSnapshot.current = queuedRemoteSnapshot.current;
-            queuedRemoteSnapshot.current = null;
-          }
-          isInitialized.current = true;
-          return;
-        }
+      (snapshot) => {
+        const mergedSnapshot: StoreSnapshot = {
+          activities: snapshot.activities,
+          ...localNonActivityStateRef.current,
+        };
 
         if (hasPendingWrite.current) {
-          queuedRemoteSnapshot.current = snapshot;
+          queuedRemoteSnapshot.current = mergedSnapshot;
           return;
         }
 
         // Apply remote data to local store
-        setStoreData(snapshot);
-        lastConfirmedSnapshot.current = snapshot;
+        setStoreData(mergedSnapshot);
+        lastConfirmedSnapshot.current = mergedSnapshot;
         isInitialized.current = true;
       },
       () => {
-        // Document doesn't exist yet (new user) — push current local data to Firestore
+        // No remote activities for this user yet; sync current local activities.
         const snapshot = buildSnapshot();
-        const writeId = uuidv4();
-        lastWriteId.current = writeId;
         hasPendingWrite.current = true;
-        saveToFirestore(user.uid, snapshot, writeId)
+        saveToFirestore(user.uid, snapshot)
           .then(() => {
-            lastConfirmedSnapshot.current = snapshot;
             hasPendingWrite.current = false;
+            if (queuedRemoteSnapshot.current) {
+              setStoreData(queuedRemoteSnapshot.current);
+              lastConfirmedSnapshot.current = queuedRemoteSnapshot.current;
+              queuedRemoteSnapshot.current = null;
+            } else {
+              lastConfirmedSnapshot.current = snapshot;
+            }
             isInitialized.current = true;
           })
           .catch(handleWriteFailure);
@@ -116,13 +129,17 @@ export default function FirebaseSync() {
 
     debounceTimer.current = setTimeout(() => {
       const snapshot = buildSnapshot();
-      const writeId = uuidv4();
-      lastWriteId.current = writeId;
       hasPendingWrite.current = true;
-      saveToFirestore(user.uid, snapshot, writeId)
+      saveToFirestore(user.uid, snapshot)
         .then(() => {
-          lastConfirmedSnapshot.current = snapshot;
           hasPendingWrite.current = false;
+          if (queuedRemoteSnapshot.current) {
+            setStoreData(queuedRemoteSnapshot.current);
+            lastConfirmedSnapshot.current = queuedRemoteSnapshot.current;
+            queuedRemoteSnapshot.current = null;
+          } else {
+            lastConfirmedSnapshot.current = snapshot;
+          }
         })
         .catch(handleWriteFailure);
     }, DEBOUNCE_MS);
