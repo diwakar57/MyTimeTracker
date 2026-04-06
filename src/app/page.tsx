@@ -5,9 +5,11 @@ import { useStore } from '@/store/useStore';
 import ActivityCard from '@/components/ActivityCard';
 import ActivityModal from '@/components/ActivityModal';
 import { Activity } from '@/types';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function Dashboard() {
   const { activities, addActivity, updateActivity } = useStore();
+  const { user } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | undefined>();
 
@@ -15,7 +17,8 @@ export default function Dashboard() {
     if (editingActivity) {
       updateActivity(editingActivity.id, { name, color });
     } else {
-      addActivity(name, color);
+      if (!user) return;
+      addActivity(name, color, user.uid);
     }
   };
 
