@@ -1,22 +1,22 @@
 'use client';
-import { useState } from 'react';
-import { useStore, Activity } from '@/lib/store';
-import ActivityCard from '@/components/ActivityCard';
-import AddActivityModal from '@/components/AddActivityModal';
-import Analytics from '@/components/Analytics';
 
-export default function Home() {
-  const { activities, addActivity, editActivity } = useStore();
+import { useState } from 'react';
+import { useStore } from '@/store/useStore';
+import ActivityCard from '@/components/ActivityCard';
+import ActivityModal from '@/components/ActivityModal';
+import { Activity } from '@/types';
+
+export default function Dashboard() {
+  const { activities, addActivity, updateActivity } = useStore();
   const [showModal, setShowModal] = useState(false);
-  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [editingActivity, setEditingActivity] = useState<Activity | undefined>();
 
   const handleSave = (name: string, color: string) => {
     if (editingActivity) {
-      editActivity(editingActivity.id, { name, color });
+      updateActivity(editingActivity.id, { name, color });
     } else {
-      addActivity({ name, color });
+      addActivity(name, color);
     }
-    setEditingActivity(null);
   };
 
   const handleEdit = (activity: Activity) => {
@@ -24,49 +24,47 @@ export default function Home() {
     setShowModal(true);
   };
 
-  const handleCloseModal = () => {
+  const handleClose = () => {
     setShowModal(false);
-    setEditingActivity(null);
+    setEditingActivity(undefined);
   };
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-8">
-      <header className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white">MyTimeTracker</h1>
-          <p className="text-gray-500 text-sm mt-1">Track your time, boost your productivity</p>
-        </div>
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-medium transition-colors"
+          className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-          Add Activity
+          + Add Activity
         </button>
-      </header>
+      </div>
 
       {activities.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
-          <p className="text-lg">No activities yet</p>
-          <p className="text-sm mt-1">Add an activity to start tracking your time</p>
+          <p className="text-lg">No activities yet.</p>
+          <p>Click &quot;Add Activity&quot; to get started.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
-          {activities.map(a => (
-            <ActivityCard key={a.id} activity={a} onEdit={handleEdit} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {activities.map((activity) => (
+            <ActivityCard
+              key={activity.id}
+              activity={activity}
+              onEdit={() => handleEdit(activity)}
+            />
           ))}
         </div>
       )}
 
-      <Analytics />
-
       {showModal && (
-        <AddActivityModal
-          onClose={handleCloseModal}
-          onSave={handleSave}
+        <ActivityModal
           activity={editingActivity}
+          onSave={handleSave}
+          onClose={handleClose}
         />
       )}
-    </main>
+    </div>
   );
 }
