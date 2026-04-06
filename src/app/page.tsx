@@ -14,10 +14,11 @@ export default function Dashboard() {
   const [editingActivity, setEditingActivity] = useState<Activity | undefined>();
 
   const handleSave = (name: string, color: string) => {
+    if (!user) return;
+
     if (editingActivity) {
       updateActivity(editingActivity.id, { name, color });
     } else {
-      if (!user) return;
       addActivity(name, color, user.uid);
     }
   };

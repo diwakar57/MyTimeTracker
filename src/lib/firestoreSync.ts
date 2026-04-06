@@ -94,7 +94,7 @@ export function subscribeToFirestore(
       allowOverlap: data.allowOverlap ?? false,
       writeId: data.writeId ?? '',
     };
-    if (cachedActivities.length === 0 && Array.isArray(data.activities)) {
+    if (Array.isArray(data.activities)) {
       cachedActivities = data.activities.filter((activity) => activity.userId === uid);
     }
     emitSnapshot();
