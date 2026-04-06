@@ -15,7 +15,8 @@ export default function FirebaseSync() {
   const timers = useStore((s) => s.timers);
   const allowOverlap = useStore((s) => s.allowOverlap);
   const setStoreData = useStore((s) => s.setStoreData);
-  const localStorageClearedForUser = useRef<string | null>(null);
+  const lastClearedUserId = useRef<string | null>(null);
+  const localNonActivityStateRef = useRef({ sessions, timers, allowOverlap });
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialized = useRef(false);
@@ -44,13 +45,18 @@ export default function FirebaseSync() {
   }), [activities, sessions, timers, allowOverlap]);
 
   useEffect(() => {
+    localNonActivityStateRef.current = { sessions, timers, allowOverlap };
+  }, [sessions, timers, allowOverlap]);
+
+  useEffect(() => {
     if (!user) {
-      localStorageClearedForUser.current = null;
+      lastClearedUserId.current = null;
       return;
     }
-    if (localStorageClearedForUser.current === user.uid) return;
+    // Clear stale persisted local state once per logged-in user to force cloud activity reload.
+    if (lastClearedUserId.current === user.uid) return;
     localStorage.removeItem(STORE_PERSIST_KEY);
-    localStorageClearedForUser.current = user.uid;
+    lastClearedUserId.current = user.uid;
   }, [user]);
 
   // Subscribe to real-time Firestore updates when user is logged in
@@ -72,23 +78,19 @@ export default function FirebaseSync() {
     const unsubscribe = subscribeToFirestore(
       user.uid,
       (snapshot) => {
-        if (hasPendingWrite.current && queuedRemoteSnapshot.current) {
-          setStoreData(queuedRemoteSnapshot.current);
-          lastConfirmedSnapshot.current = queuedRemoteSnapshot.current;
-          queuedRemoteSnapshot.current = null;
-          hasPendingWrite.current = false;
-          isInitialized.current = true;
-          return;
-        }
+        const mergedSnapshot: StoreSnapshot = {
+          activities: snapshot.activities,
+          ...localNonActivityStateRef.current,
+        };
 
         if (hasPendingWrite.current) {
-          queuedRemoteSnapshot.current = snapshot;
+          queuedRemoteSnapshot.current = mergedSnapshot;
           return;
         }
 
         // Apply remote data to local store
-        setStoreData(snapshot);
-        lastConfirmedSnapshot.current = snapshot;
+        setStoreData(mergedSnapshot);
+        lastConfirmedSnapshot.current = mergedSnapshot;
         isInitialized.current = true;
       },
       () => {
@@ -97,8 +99,14 @@ export default function FirebaseSync() {
         hasPendingWrite.current = true;
         saveToFirestore(user.uid, snapshot)
           .then(() => {
-            lastConfirmedSnapshot.current = snapshot;
             hasPendingWrite.current = false;
+            if (queuedRemoteSnapshot.current) {
+              setStoreData(queuedRemoteSnapshot.current);
+              lastConfirmedSnapshot.current = queuedRemoteSnapshot.current;
+              queuedRemoteSnapshot.current = null;
+            } else {
+              lastConfirmedSnapshot.current = snapshot;
+            }
             isInitialized.current = true;
           })
           .catch(handleWriteFailure);
@@ -124,8 +132,14 @@ export default function FirebaseSync() {
       hasPendingWrite.current = true;
       saveToFirestore(user.uid, snapshot)
         .then(() => {
-          lastConfirmedSnapshot.current = snapshot;
           hasPendingWrite.current = false;
+          if (queuedRemoteSnapshot.current) {
+            setStoreData(queuedRemoteSnapshot.current);
+            lastConfirmedSnapshot.current = queuedRemoteSnapshot.current;
+            queuedRemoteSnapshot.current = null;
+          } else {
+            lastConfirmedSnapshot.current = snapshot;
+          }
         })
         .catch(handleWriteFailure);
     }, DEBOUNCE_MS);
@@ -133,7 +147,7 @@ export default function FirebaseSync() {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  }, [user, buildSnapshot, handleWriteFailure]);
+  }, [user, buildSnapshot, setStoreData, handleWriteFailure]);
 
   return null;
 }
