@@ -3,17 +3,33 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAoBiVgfLO1oPGCmmyudeSI_4pa0F0wOsA",
-  authDomain: "mytimetrackergit.firebaseapp.com",
-  projectId: "mytimetrackergit",
-  storageBucket: "mytimetrackergit.firebasestorage.app",
-  messagingSenderId: "301128777642",
-  appId: "1:301128777642:web:c0c2de9e36baf393b4b5d3",
-  measurementId: "G-XP3WCZ29VS",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
+
+function validateFirebaseConfig() {
+  const requiredEnvVars = [
+    'NEXT_PUBLIC_FIREBASE_API_KEY',
+    'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+    'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+    'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
+    'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+    'NEXT_PUBLIC_FIREBASE_APP_ID',
+  ];
+  const missingVars = requiredEnvVars.filter((name) => !process.env[name]);
+
+  if (missingVars.length > 0) {
+    throw new Error(`Missing Firebase environment variables: ${missingVars.join(', ')}`);
+  }
+}
 
 function getApp() {
   if (getApps().length === 0) {
+    validateFirebaseConfig();
     return initializeApp(firebaseConfig);
   }
   return _getApp();
