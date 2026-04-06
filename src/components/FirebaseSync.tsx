@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/components/AuthProvider';
 import { useStore } from '@/store/useStore';
 import { saveToFirestore, subscribeToFirestore, StoreSnapshot } from '@/lib/firestoreSync';
+import { STORE_PERSIST_KEY } from '@/store/useStore';
 
 const DEBOUNCE_MS = 1500;
 
@@ -17,7 +17,6 @@ export default function FirebaseSync() {
   const setStoreData = useStore((s) => s.setStoreData);
   const localStorageClearedForUser = useRef<string | null>(null);
 
-  const lastWriteId = useRef<string>('');
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialized = useRef(false);
   const lastConfirmedSnapshot = useRef<StoreSnapshot | null>(null);
@@ -50,7 +49,7 @@ export default function FirebaseSync() {
       return;
     }
     if (localStorageClearedForUser.current === user.uid) return;
-    localStorage.removeItem('mytimetracker-store');
+    localStorage.removeItem(STORE_PERSIST_KEY);
     localStorageClearedForUser.current = user.uid;
   }, [user]);
 
@@ -72,15 +71,12 @@ export default function FirebaseSync() {
 
     const unsubscribe = subscribeToFirestore(
       user.uid,
-      (snapshot, writeId) => {
-        if (writeId && writeId === lastWriteId.current) {
+      (snapshot) => {
+        if (hasPendingWrite.current && queuedRemoteSnapshot.current) {
+          setStoreData(queuedRemoteSnapshot.current);
+          lastConfirmedSnapshot.current = queuedRemoteSnapshot.current;
+          queuedRemoteSnapshot.current = null;
           hasPendingWrite.current = false;
-          lastConfirmedSnapshot.current = snapshot;
-          if (queuedRemoteSnapshot.current) {
-            setStoreData(queuedRemoteSnapshot.current);
-            lastConfirmedSnapshot.current = queuedRemoteSnapshot.current;
-            queuedRemoteSnapshot.current = null;
-          }
           isInitialized.current = true;
           return;
         }
@@ -96,17 +92,10 @@ export default function FirebaseSync() {
         isInitialized.current = true;
       },
       () => {
-        // Document doesn't exist yet (new user) — push current local data to Firestore
-        const snapshot = {
-          ...buildSnapshot(),
-          sessions: [],
-          timers: {},
-          allowOverlap: false,
-        };
-        const writeId = uuidv4();
-        lastWriteId.current = writeId;
+        // No remote activities for this user yet; sync current local activities.
+        const snapshot = buildSnapshot();
         hasPendingWrite.current = true;
-        saveToFirestore(user.uid, snapshot, writeId)
+        saveToFirestore(user.uid, snapshot)
           .then(() => {
             lastConfirmedSnapshot.current = snapshot;
             hasPendingWrite.current = false;
@@ -132,11 +121,8 @@ export default function FirebaseSync() {
 
     debounceTimer.current = setTimeout(() => {
       const snapshot = buildSnapshot();
-      if (snapshot.activities.length === 0) return;
-      const writeId = uuidv4();
-      lastWriteId.current = writeId;
       hasPendingWrite.current = true;
-      saveToFirestore(user.uid, snapshot, writeId)
+      saveToFirestore(user.uid, snapshot)
         .then(() => {
           lastConfirmedSnapshot.current = snapshot;
           hasPendingWrite.current = false;
@@ -147,7 +133,7 @@ export default function FirebaseSync() {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  }, [user, buildSnapshot, setStoreData, handleWriteFailure]);
+  }, [user, buildSnapshot, handleWriteFailure]);
 
   return null;
 }

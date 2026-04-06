@@ -17,12 +17,10 @@ export interface StoreSnapshot {
   sessions: Session[];
   timers: Record<string, TimerState>;
   allowOverlap: boolean;
-  writeId?: string;
 }
 
-export async function saveToFirestore(uid: string, data: StoreSnapshot, writeId: string): Promise<void> {
+export async function saveToFirestore(uid: string, data: StoreSnapshot): Promise<void> {
   try {
-    void writeId;
     if (!uid) {
       throw new Error('Missing authenticated user id for Firestore save.');
     }
@@ -60,7 +58,7 @@ export async function saveToFirestore(uid: string, data: StoreSnapshot, writeId:
 
 export function subscribeToFirestore(
   uid: string,
-  onData: (snapshot: StoreSnapshot, writeId: string) => void,
+  onData: (snapshot: StoreSnapshot) => void,
   onMissing: () => void
 ): Unsubscribe {
   const db = getFirebaseDb();
@@ -82,8 +80,7 @@ export function subscribeToFirestore(
         sessions: [],
         timers: {},
         allowOverlap: false,
-      },
-      ''
+      }
     );
   });
 }
