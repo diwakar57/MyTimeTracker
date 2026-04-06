@@ -15,6 +15,7 @@ export default function FirebaseSync() {
   const timers = useStore((s) => s.timers);
   const allowOverlap = useStore((s) => s.allowOverlap);
   const setStoreData = useStore((s) => s.setStoreData);
+  const localStorageClearedForUser = useRef<string | null>(null);
 
   const lastWriteId = useRef<string>('');
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,6 +43,16 @@ export default function FirebaseSync() {
     timers,
     allowOverlap,
   }), [activities, sessions, timers, allowOverlap]);
+
+  useEffect(() => {
+    if (!user) {
+      localStorageClearedForUser.current = null;
+      return;
+    }
+    if (localStorageClearedForUser.current === user.uid) return;
+    localStorage.removeItem('mytimetracker-store');
+    localStorageClearedForUser.current = user.uid;
+  }, [user]);
 
   // Subscribe to real-time Firestore updates when user is logged in
   useEffect(() => {
@@ -86,7 +97,12 @@ export default function FirebaseSync() {
       },
       () => {
         // Document doesn't exist yet (new user) — push current local data to Firestore
-        const snapshot = buildSnapshot();
+        const snapshot = {
+          ...buildSnapshot(),
+          sessions: [],
+          timers: {},
+          allowOverlap: false,
+        };
         const writeId = uuidv4();
         lastWriteId.current = writeId;
         hasPendingWrite.current = true;
@@ -116,6 +132,7 @@ export default function FirebaseSync() {
 
     debounceTimer.current = setTimeout(() => {
       const snapshot = buildSnapshot();
+      if (snapshot.activities.length === 0) return;
       const writeId = uuidv4();
       lastWriteId.current = writeId;
       hasPendingWrite.current = true;

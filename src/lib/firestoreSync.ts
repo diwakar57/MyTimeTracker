@@ -1,6 +1,5 @@
 import {
   doc,
-  setDoc,
   getDocs,
   collection,
   query,
@@ -21,12 +20,9 @@ export interface StoreSnapshot {
   writeId?: string;
 }
 
-function userDocRef(uid: string) {
-  return doc(getFirebaseDb(), 'users', uid, 'data', 'state');
-}
-
 export async function saveToFirestore(uid: string, data: StoreSnapshot, writeId: string): Promise<void> {
   try {
+    void writeId;
     if (!uid) {
       throw new Error('Missing authenticated user id for Firestore save.');
     }
@@ -56,13 +52,6 @@ export async function saveToFirestore(uid: string, data: StoreSnapshot, writeId:
     });
 
     await batch.commit();
-
-    await setDoc(userDocRef(uid), {
-      ...data,
-      activities: normalizedActivities,
-      writeId,
-      updatedAt: serverTimestamp(),
-    });
   } catch (error) {
     console.error('Firestore Save Error:', error);
     throw error;
@@ -75,54 +64,26 @@ export function subscribeToFirestore(
   onMissing: () => void
 ): Unsubscribe {
   const db = getFirebaseDb();
-  const activitiesCollection = collection(db, 'activities');
-  let cachedActivities: Activity[] = [];
-  let cachedState: (Omit<StoreSnapshot, 'activities'> & { writeId?: string }) | null = null;
+  let hasReceivedSnapshot = false;
 
-  const emitSnapshot = () => {
-    if (!cachedState) return;
-    onData(
-      {
-        activities: cachedActivities,
-        sessions: cachedState.sessions ?? [],
-        timers: cachedState.timers ?? {},
-        allowOverlap: cachedState.allowOverlap ?? false,
-      },
-      cachedState.writeId ?? ''
-    );
-  };
+  return onSnapshot(query(collection(db, 'activities'), where('userId', '==', uid)), (activitySnapshot) => {
+    const activities = activitySnapshot.docs.map((docSnapshot) => docSnapshot.data() as Activity);
 
-  const unsubscribeUserState = onSnapshot(userDocRef(uid), (snap) => {
-    if (!snap.exists()) {
-      cachedState = null;
+    if (!hasReceivedSnapshot && activities.length === 0) {
+      hasReceivedSnapshot = true;
       onMissing();
       return;
     }
 
-    const data = snap.data() as StoreSnapshot & { writeId?: string };
-    cachedState = {
-      sessions: data.sessions ?? [],
-      timers: data.timers ?? {},
-      allowOverlap: data.allowOverlap ?? false,
-      writeId: data.writeId ?? '',
-    };
-    if (Array.isArray(data.activities)) {
-      cachedActivities = data.activities.filter((activity) => activity.userId === uid);
-    }
-    emitSnapshot();
+    hasReceivedSnapshot = true;
+    onData(
+      {
+        activities,
+        sessions: [],
+        timers: {},
+        allowOverlap: false,
+      },
+      ''
+    );
   });
-
-  const unsubscribeActivities = onSnapshot(
-    query(activitiesCollection, where('userId', '==', uid)),
-    (activitySnapshot) => {
-      const activities = activitySnapshot.docs.map((docSnapshot) => docSnapshot.data() as Activity);
-      cachedActivities = activities;
-      emitSnapshot();
-    }
-  );
-
-  return () => {
-    unsubscribeUserState();
-    unsubscribeActivities();
-  };
 }
