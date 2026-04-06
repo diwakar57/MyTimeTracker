@@ -11,8 +11,19 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+function validateFirebaseConfig() {
+  const missingVars = Object.entries(firebaseConfig)
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+
+  if (missingVars.length > 0) {
+    throw new Error(`Missing Firebase environment variables: ${missingVars.join(', ')}`);
+  }
+}
+
 function getApp() {
   if (getApps().length === 0) {
+    validateFirebaseConfig();
     return initializeApp(firebaseConfig);
   }
   return _getApp();
