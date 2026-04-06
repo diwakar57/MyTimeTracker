@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/components/AuthProvider';
 import { useStore } from '@/store/useStore';
@@ -10,10 +10,23 @@ const DEBOUNCE_MS = 1500;
 
 export default function FirebaseSync() {
   const { user } = useAuth();
-  const store = useStore();
+  const activities = useStore((s) => s.activities);
+  const sessions = useStore((s) => s.sessions);
+  const timers = useStore((s) => s.timers);
+  const allowOverlap = useStore((s) => s.allowOverlap);
+  const setStoreData = useStore((s) => s.setStoreData);
+
   const lastWriteId = useRef<string>('');
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialized = useRef(false);
+
+  // Build a snapshot from current store slices (stable reference via useCallback)
+  const buildSnapshot = useCallback((): StoreSnapshot => ({
+    activities,
+    sessions,
+    timers,
+    allowOverlap,
+  }), [activities, sessions, timers, allowOverlap]);
 
   // Subscribe to real-time Firestore updates when user is logged in
   useEffect(() => {
@@ -29,17 +42,12 @@ export default function FirebaseSync() {
         if (writeId && writeId === lastWriteId.current) return;
 
         // Apply remote data to local store
-        store.setStoreData(snapshot);
+        setStoreData(snapshot);
         isInitialized.current = true;
       },
       () => {
         // Document doesn't exist yet (new user) — push current local data to Firestore
-        const snapshot: StoreSnapshot = {
-          activities: store.activities,
-          sessions: store.sessions,
-          timers: store.timers,
-          allowOverlap: store.allowOverlap,
-        };
+        const snapshot = buildSnapshot();
         const writeId = uuidv4();
         lastWriteId.current = writeId;
         saveToFirestore(user.uid, snapshot, writeId)
@@ -52,8 +60,7 @@ export default function FirebaseSync() {
       unsubscribe();
       isInitialized.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, setStoreData, buildSnapshot]);
 
   // Debounced write to Firestore whenever local state changes
   useEffect(() => {
@@ -62,12 +69,7 @@ export default function FirebaseSync() {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
     debounceTimer.current = setTimeout(() => {
-      const snapshot: StoreSnapshot = {
-        activities: store.activities,
-        sessions: store.sessions,
-        timers: store.timers,
-        allowOverlap: store.allowOverlap,
-      };
+      const snapshot = buildSnapshot();
       const writeId = uuidv4();
       lastWriteId.current = writeId;
       saveToFirestore(user.uid, snapshot, writeId).catch(console.error);
@@ -76,8 +78,7 @@ export default function FirebaseSync() {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, store.activities, store.sessions, store.timers, store.allowOverlap]);
+  }, [user, buildSnapshot]);
 
   return null;
 }
